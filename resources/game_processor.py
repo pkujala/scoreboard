@@ -60,14 +60,17 @@ def calculate_ranking(stats: Dict):
     for i in range(n):
 
         for j in range(0, n-i-1):
-            goal_difference = ordered_list[j].goals - ordered_list[j].goals_allowed
-            goal_difference_next = ordered_list[j+1].goals - ordered_list[j+1].goals_allowed
+            goal_difference = ordered_list[j].goals - \
+                ordered_list[j].goals_allowed
+            goal_difference_next = ordered_list[j +
+                                                1].goals - ordered_list[j+1].goals_allowed
 
-            if (ordered_list[j].points < ordered_list[j+1].points ) and ordered_list[j].group_name == ordered_list[j+1].group_name:
-                ordered_list[j], ordered_list[j + 1] = ordered_list[j+1], ordered_list[j]
+            if (ordered_list[j].points < ordered_list[j+1].points) and ordered_list[j].group_name == ordered_list[j+1].group_name:
+                ordered_list[j], ordered_list[j +
+                                              1] = ordered_list[j+1], ordered_list[j]
             elif (ordered_list[j].points == ordered_list[j+1].points and goal_difference < goal_difference_next and ordered_list[j].group_name == ordered_list[j+1].group_name):
-                ordered_list[j], ordered_list[j + 1] = ordered_list[j+1], ordered_list[j]
-
+                ordered_list[j], ordered_list[j +
+                                              1] = ordered_list[j+1], ordered_list[j]
 
     return ordered_list
 
@@ -76,40 +79,39 @@ def print_table(ordered_list):
 
     print_header = True
     previous_group = ""
+    table = ""
     for i in range(len(ordered_list)):
 
         if previous_group != ordered_list[i].group_name:
             previous_group = ordered_list[i].group_name
-            print("")
-            print(ordered_list[i].group_name)
-            print("                                   " + " O  " +
-                  "V  " + "T  " + "H " + "   M" + "    P")
+            table = table + "\n"
+            table = table + ordered_list[i].group_name + "\n"
+            table = table + "                         " + \
+                " O  " + "V  " + "T  " + "H " + "   M" + "    P\n"
 
         games = ordered_list[i].wins + \
             ordered_list[i].losses + ordered_list[i].ties
-        print(ordered_list[i].team_name +
-              str(games).rjust(2) + " " +
-              str(ordered_list[i].wins).rjust(2) + " " +
-              str(ordered_list[i].ties).rjust(2) + " " +
-              str(ordered_list[i].losses).rjust(2) + " " +
-              str(ordered_list[i].goals).rjust(2) + "-" +
-              str(ordered_list[i].goals_allowed).ljust(2) + " " +
-              str(ordered_list[i].points).rjust(3))
+
+        table = table + ordered_list[i].team_name + str(games).rjust(2) + " " + str(ordered_list[i].wins).rjust(2) + " " + str(ordered_list[i].ties).rjust(2) + " " + str(
+            ordered_list[i].losses).rjust(2) + " " + str(ordered_list[i].goals).rjust(2) + "-" + str(ordered_list[i].goals_allowed).ljust(2) + " " + str(ordered_list[i].points).rjust(3) + "\n"
+    
+    return table
 
 
 def scrape_matches():
 
     i = 0
     response = None
+    # Trying max 50 times to execute GET's
     while True and i < 50:
 
         try:
             # print("Scraping... " + str(i))
             scraper = cloudscraper.create_scraper()
             response = scraper.get("https://spl.torneopal.net/taso/rest/getMatches?competition_id=etejp21&category_id=P11&tpid=-594016905", headers={
-                "origin":"https://tulospalvelu.palloliitto.fi",
-                "referer":"https://tulospalvelu.palloliitto.fi/",
-                "accept":"json/df8e84j9xtdz269euy3h",
+                "origin": "https://tulospalvelu.palloliitto.fi",
+                "referer": "https://tulospalvelu.palloliitto.fi/",
+                "accept": "json/df8e84j9xtdz269euy3h",
                 "host": "spl.torneopal.net",
                 "path": "/taso/rest/getMatches?competition_id=etejp21&category_id=P11&tpid=-594016905",
                 "sec-fetch-mode": "cors",
@@ -122,43 +124,48 @@ def scrape_matches():
             pass
 
         i = i + 1
-    
+
     if response == None:
         raise Exception("Getting matches didn't succeed!")
-          
+
     return response
 
+def lambda_handler(event, context):
+    response = scrape_matches()
 
-response = scrape_matches()
+    stats = {}
+    for match in response['matches']:
 
-stats = {}
-for match in response['matches']:
+        team_a_id = match['team_A_id'] + match['group_name']
+        team_b_id = match['team_B_id'] + match['group_name']
 
-    team_a_id = match['team_A_id'] + match['group_name']
-    team_b_id = match['team_B_id'] + match['group_name']
+        # Let's check if team A already is in stats collection
+        if team_a_id in stats:
+            team_stats_a = stats[team_a_id]
+        else:
+            team_stats_a = TeamStats()
+            team_stats_a.team_name = match['team_A_name'].ljust(25)
+            team_stats_a.group_name = match['group_name']
 
-    # Let's check if team A already is in stats collection
-    if team_a_id in stats:
-        team_stats_a = stats[team_a_id]
-    else:
-        team_stats_a = TeamStats()
-        team_stats_a.team_name = match['team_A_name'].ljust(35)
-        team_stats_a.group_name = match['group_name']
+        # Let's check if team B already is in stats collection
+        if team_b_id in stats:
+            team_stats_b = stats[team_b_id]
+        else:
+            team_stats_b = TeamStats()
+            team_stats_b.team_name = match['team_B_name'].ljust(25)
+            team_stats_a.group_name = match['group_name']
 
-    # Let's check if team B already is in stats collection
-    if team_b_id in stats:
-        team_stats_b = stats[team_b_id]
-    else:
-        team_stats_b = TeamStats()
-        team_stats_b.team_name = match['team_B_name'].ljust(35)
-        team_stats_a.group_name = match['group_name']
+        team_stats_a = add_match_stats(team_stats_a, match, 'A')
+        team_stats_b = add_match_stats(team_stats_b, match, 'B')
 
-    team_stats_a = add_match_stats(team_stats_a, match, 'A')
-    team_stats_b = add_match_stats(team_stats_b, match, 'B')
-
-    stats[team_a_id] = team_stats_a
-    stats[team_b_id] = team_stats_b
+        stats[team_a_id] = team_stats_a
+        stats[team_b_id] = team_stats_b
 
 
-stats = calculate_ranking(stats)
-print_table(stats)
+    stats = calculate_ranking(stats)
+    table = print_table(stats)
+
+    return {
+        'statusCode': 200,
+        'body': "<pre>" + table + "</pre>"
+    }
